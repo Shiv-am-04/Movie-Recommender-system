@@ -102,7 +102,7 @@ sidebox = st.sidebar.selectbox(
 
 
 if sidebox == "Recommened Movies":
-  user_input = st.text_input(label=':blue[***Enter Movie Name***]',placeholder='The Batman Begins')
+  user_input = st.text_input(label=':blue[***Enter Movie Name***]',placeholder='Batman Begins')
 
   if user_input:
     movies = recommender(user_input.lower())
@@ -126,7 +126,7 @@ elif sidebox == 'Filter Movies':
         movie_poster(filtered_movies)
   
   elif radio_option.index(select_option) == 1:
-    director = st.sidebar.text_input(":red[***Director***]",placeholder='Cristopher Nolan')
+    director = st.sidebar.text_input(":red[***Director***]",placeholder='Christopher Nolan')
     if director:
       filtered_movies = filter_movies(director=director.lower())
       if filtered_movies == 0:
