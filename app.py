@@ -1,8 +1,20 @@
-from flask import Flask,render_template,request
+import streamlit as st
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+omdb_api_key = os.getenv('OMDB_API_KEY')
+
+
+st.set_page_config(page_title='Movie Recommender')
+
+st.title(":blue[_Movie Recommender_] :movie_camera:")
+
 
 with open('word_index','rb') as handle:
   word2index = pickle.load(handle)
@@ -14,96 +26,112 @@ movies = pd.read_csv('Movies.csv')
 
 
 def recommender(movie_name):
-  index = word2index[movie_name]
+  if movie_name in word2index:
+    index = word2index[movie_name]
 
-  movie_tfidf = vectors[index]
+    movie_tfidf = vectors[index]
 
-  similar = cosine_similarity(movie_tfidf,vectors)
+    similar = cosine_similarity(movie_tfidf,vectors)
 
-  score = similar.flatten()
+    score = similar.flatten()
 
-  top_5_index = score.argsort()[::-1][:6]
+    top_5_index = score.argsort()[::-1][:6]
 
-  top_5_movies = movies['title'].iloc[top_5_index]
+    top_5_movies = movies['title'].iloc[top_5_index]
 
-  return top_5_movies.to_list()
+    return top_5_movies.to_list()
 
-
-def filter_movies(search,num_results=10):
-  # num_results = int(num_results)
-  genres = movies[movies['genres'].apply(lambda x: search in x and 'Adventure' not in x and 'Fantasy' not in x)]
-  if not genres.empty:
-    if len(genres['genres']) < num_results:
-      return genres['title'][:len(genres['genres'])]
-    return genres['title'][:num_results]
-
-  cast = movies[movies['cast'].apply(lambda x: search in x)]
-  if not cast.empty:
-    if len(cast['cast']) < num_results:
-      return cast['title'][:len(cast['cast'])]
-    return cast['title'][:num_results]
-
-  director = movies[movies['director'] == 'search']
-  if not director.empty:
-    return director['title']
-
-  return ['No Results!']
-
-# def recommended_movie_poster(recommend_movies):
+  return 0
 
 
+def filter_movies(cast=None,director=None,num_results=10):
+  if cast is not None:
+    casting = movies[movies['cast'].apply(lambda x: cast in x)]
+    if not casting.empty:
+      if len(casting['cast']) < num_results:
+        return casting['title'][:len(casting['cast'])].to_list()
+      return casting['title'][:num_results].to_list()
+    else:
+      return 0
 
-OMDB_API_KEY = '95227554'
+  if director is not None:
+    directors = movies[movies['director'] == director] 
+    if not directors.empty:
+      return directors['title'].to_list()
+    else:
+      return 0
 
-app = Flask(__name__)
 
-@app.route("/")
-def index():
-  return render_template('index.html')
-
-
-@app.route("/recommend",methods=['GET','POST'])
-def recommend():
-  movie = request.form.get('movie')
-  genre_actor_director = request.form.get('genre_actor_director')
-  number_of_results = int(request.form.get('number_of_results',10) or 10)
-  search_method = request.form.get('search_method')
-
-  recommend_movie_posters = []
-  filter_movie = []
-
-  # if search_method == 'recommend':
-  recommend_movies = recommender(movie)
-  for movie in recommend_movies:
-    url = f'http://www.omdbapi.com/?t={movie}&apikey={OMDB_API_KEY}'
+def movie_poster(movies_list):
+  for movie in movies_list:
+    url = f'http://www.omdbapi.com/?t={movie}&apikey={omdb_api_key}'
     response = requests.get(url)
     data = response.json()
 
     if data.get('Response') == 'True' and data.get('Poster') != 'NA':
-        recommend_movie_posters.append({
-                            'title':data.get('Title'),
-                            'year':data.get('Year'),
-                            'poster':data.get('Poster'),
-                            'collection':data.get('BoxOffice')
-                            })
+      movie_title = data.get('Title')
+      movie_poster_ = data.get('Poster')
+      movie_year = data.get('Year')
+      movie_box_office = data.get('BoxOffice')
 
-  # if search_method == 'filter':
-  filtered_movies = filter_movies(genre_actor_director,number_of_results)
-  for movie in filtered_movies:
-    url = f'http://www.omdbapi.com/?t={movie}&apikey={OMDB_API_KEY}'
-    response = requests.get(url=url)
-    dat = response.json()
+      # Display the movie details
+      st.write(f"### {movie_title} ({movie_year})")
+      st.image(movie_poster_,use_column_width=True)
+      st.write(f":orange[**Box Office Collection**] {movie_box_office}")
+    
+    elif data.get('Response') == 'True' and data.get('Poster') == 'NA':
+      movie_title = data.get('Title')
+      movie_year = data.get('Year')
+      movie_box_office = data.get('BoxOffice')
 
-    if dat.get('Response') == True and dat.get('Poster') != 'NA':
-      filter_movie.append({'title':dat.get('Title'),
-                          'year':dat.get('Year'),
-                          'poster':dat.get('Poster'),
-                          'collection':dat.get('BoxOffice')
-      })
-
-  return render_template('index.html',recommend_movie_posters=recommend_movie_posters,filter_movie=filter_movie)
+      st.write(f"### {movie_title} ({movie_year})")
+      st.write(f":orange[**Box Office Collection**] {movie_box_office}")
+      st.error('sorry movie poster not found')
+    
+    elif data.get('Poster') == 'NA':
+      st.error("Movie not found or no poster available.")
 
 
-if __name__ == '__main__':
-  app.run(host='0.0.0.0',debug=True)
+
+
+
+sidebox = st.sidebar.selectbox(
+            ':green[**Choose Option**]',
+            ("Recommened Movies", "Filter Movies")
+        )
+
+
+if sidebox == "Recommened Movies":
+  user_input = st.text_input(label=':blue[***Enter Movie Name***]',placeholder='The Batman Begins')
+
+  if user_input:
+    movies = recommender(user_input.lower())
+    if movies == 0:
+      st.warning('movie not found')
+    else:
+      movie_poster(movies)
+
+elif sidebox == 'Filter Movies':
+  radio_option = ['Cast','Director']
+
+  select_option = st.sidebar.radio(":blue[***Select Any One***]",options=radio_option)
+  
+  if radio_option.index(select_option) == 0:
+    starcast = st.sidebar.text_input(":red[***Actor/Actress***]",placeholder='Tom Cruise')
+    if starcast:
+      filtered_movies = filter_movies(cast=starcast.lower())
+      if filtered_movies == 0:
+        st.error('No result found')
+      else:
+        movie_poster(filtered_movies)
+  
+  elif radio_option.index(select_option) == 1:
+    director = st.sidebar.text_input(":red[***Director***]",placeholder='Cristopher Nolan')
+    if director:
+      filtered_movies = filter_movies(director=director.lower())
+      if filtered_movies == 0:
+        st.error('No result found')
+      else:
+        movie_poster(filtered_movies)
+
 
