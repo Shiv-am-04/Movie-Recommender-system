@@ -1,5 +1,7 @@
 # Movie-Recommender-system-using-basic-NLP
 
-We are creating a recommender system which give 5 movies related to your movie
+***deployed in streamlit***
+
+https://movie-recommender-system-kvbbda8rotpm235fpkkeoc.streamlit.app/
 
 
